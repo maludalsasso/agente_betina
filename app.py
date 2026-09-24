@@ -1,6 +1,7 @@
 ﻿import os
 import sqlite3
 import json
+import requests
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify
@@ -11,6 +12,27 @@ load_dotenv()
 
 app = Flask(__name__)
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+# Configurações da Evolution API
+EVOLUTION_API_URL = os.getenv("EVOLUTION_API_URL")
+EVOLUTION_API_KEY = os.getenv("EVOLUTION_API_KEY")
+EVOLUTION_INSTANCE = os.getenv("EVOLUTION_INSTANCE", "hbfit")
+
+def enviar_mensagem_whatsapp(telefone: str, texto: str):
+    try:
+        url = f"{EVOLUTION_API_URL}/message/sendText/{EVOLUTION_INSTANCE}"
+        headers = {
+            "apikey": EVOLUTION_API_KEY,
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "number": telefone,
+            "text": texto
+        }
+        res = requests.post(url, json=payload, headers=headers, timeout=10)
+        print(f"[ENVIO EVOLUTION] Status: {res.status_code} para {telefone}")
+    except Exception as e:
+        print(f"[ERRO ENVIO EVOLUTION]: {e}")
 
 DB_FILE = "clientes.db"
 historicos = {}
@@ -293,6 +315,7 @@ def checar_e_disparar_followups():
                     nova_etapa = 2
                 
                 print(f"[FOLLOW-UP DISPARADO] Para {tel} (Etapa {nova_etapa}): {msg}")
+                enviar_mensagem_whatsapp(tel, msg)
                 cursor.execute("""
                     UPDATE contatos SET etapa_followup = ?, data_proximo_contato = ?, atualizado_em = ?
                     WHERE telefone = ?
@@ -304,6 +327,76 @@ inicializar_banco()
 scheduler = BackgroundScheduler()
 scheduler.add_job(checar_e_disparar_followups, 'interval', minutes=30)
 scheduler.start()
+
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    dados = request.get_json(force=True, silent=True)
+    if not dados:
+        return jsonify({"status": "no data"}), 200
+
+    evento = dados.get("event")
+    if evento != "messages.upsert":
+        return jsonify({"status": "ignored_event"}), 200
+
+    data = dados.get("data", {})
+    key = data.get("key", {})
+
+    from_me = key.get("fromMe", False)
+    remote_jid = key.get("remoteJid", "")
+
+    if "@g.us" in remote_jid:
+        return jsonify({"status": "ignored_group"}), 200
+
+    telefone = remote_jid.split("@")[0]
+
+    if from_me:
+        desativar_ia_para_cliente(telefone)
+        print(f"[ATENDIMENTO HUMANO] Mensagem enviada por mim para {telefone}. Betina desligada.")
+        return jsonify({"status": "humano_assumiu"}), 200
+
+    message_obj = data.get("message", {})
+    texto_cliente = (
+        message_obj.get("conversation")
+        or message_obj.get("extendedTextMessage", {}).get("text")
+        or ""
+    ).strip()
+
+    if not texto_cliente:
+        return jsonify({"status": "no_text"}), 200
+
+    cliente = consultar_cliente(telefone)
+
+    if cliente is None:
+        cadastrar_novo_cliente(telefone)
+        historico = obter_ou_criar_historico(telefone)
+        historico.append({"role": "user", "content": texto_cliente})
+        historico.append({"role": "assistant", "content": MENSAGEM_BOAS_VINDAS})
+        enviar_mensagem_whatsapp(telefone, MENSAGEM_BOAS_VINDAS)
+        return jsonify({"status": "boas_vindas_enviada"}), 200
+
+    status, total_msg, nome_cadastrado, etapa, _ = cliente
+    if status == 'humano_assumiu':
+        return jsonify({"status": "silenciada_porque_humano_assumiu_ou_aluno"}), 200
+
+    info_extraida = extrair_data_ou_nome(texto_cliente)
+    nome_atualizado = info_extraida.get("nome") or nome_cadastrado
+    dias_adiar = info_extraida.get("dias_adiar", 7)
+
+    historico = obter_ou_criar_historico(telefone)
+    historico.append({"role": "user", "content": texto_cliente})
+
+    resposta = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=historico,
+        temperature=0.3
+    )
+    texto_resposta = resposta.choices[0].message.content
+    historico.append({"role": "assistant", "content": texto_resposta})
+
+    atualizar_interacao(telefone, nome=nome_atualizado, dias_adiar=dias_adiar)
+    enviar_mensagem_whatsapp(telefone, texto_resposta)
+
+    return jsonify({"status": "mensagem_processada"}), 200
 
 @app.route('/testar', methods=['POST'])
 def testar():
