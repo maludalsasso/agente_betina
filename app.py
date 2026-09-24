@@ -13,9 +13,9 @@ load_dotenv()
 app = Flask(__name__)
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# Configurações da Evolution API
-EVOLUTION_API_URL = os.getenv("EVOLUTION_API_URL")
-EVOLUTION_API_KEY = os.getenv("EVOLUTION_API_KEY")
+# Configuracoes da Evolution API
+EVOLUTION_API_URL = os.getenv("EVOLUTION_API_URL", "http://evolution-api:8080")
+EVOLUTION_API_KEY = os.getenv("EVOLUTION_API_KEY", "hbfit_evolution_61k2Xp4Ma7Qa")
 EVOLUTION_INSTANCE = os.getenv("EVOLUTION_INSTANCE", "hbfit")
 
 def enviar_mensagem_whatsapp(telefone: str, texto: str):
@@ -343,15 +343,20 @@ def webhook():
 
     from_me = key.get("fromMe", False)
     remote_jid = key.get("remoteJid", "")
+    remote_jid_alt = key.get("remoteJidAlt", "")
 
     if "@g.us" in remote_jid:
         return jsonify({"status": "ignored_group"}), 200
 
-    telefone = remote_jid.split("@")[0]
+    # Prioriza o numero real caso venha formato @lid
+    jid_alvo = remote_jid_alt if (remote_jid_alt and "@s.whatsapp.net" in remote_jid_alt) else remote_jid
+    telefone = jid_alvo.split("@")[0]
+
+    print(f"[MENSAGEM RECEBIDA] De: {telefone} | fromMe: {from_me}")
 
     if from_me:
         desativar_ia_para_cliente(telefone)
-        print(f"[ATENDIMENTO HUMANO] Mensagem enviada por mim para {telefone}. Betina desligada.")
+        print(f"[ATENDIMENTO HUMANO] Malu digitou para {telefone}. Betina desligada.")
         return jsonify({"status": "humano_assumiu"}), 200
 
     message_obj = data.get("message", {})
@@ -371,11 +376,13 @@ def webhook():
         historico = obter_ou_criar_historico(telefone)
         historico.append({"role": "user", "content": texto_cliente})
         historico.append({"role": "assistant", "content": MENSAGEM_BOAS_VINDAS})
+        print(f"[NOVO CLIENTE] Disparando boas-vindas para {telefone}")
         enviar_mensagem_whatsapp(telefone, MENSAGEM_BOAS_VINDAS)
         return jsonify({"status": "boas_vindas_enviada"}), 200
 
     status, total_msg, nome_cadastrado, etapa, _ = cliente
     if status == 'humano_assumiu':
+        print(f"[SILENCIADA] Atendimento humano ativo para {telefone}")
         return jsonify({"status": "silenciada_porque_humano_assumiu_ou_aluno"}), 200
 
     info_extraida = extrair_data_ou_nome(texto_cliente)
@@ -394,6 +401,7 @@ def webhook():
     historico.append({"role": "assistant", "content": texto_resposta})
 
     atualizar_interacao(telefone, nome=nome_atualizado, dias_adiar=dias_adiar)
+    print(f"[RESPONDENDO] Para {telefone}: {texto_resposta}")
     enviar_mensagem_whatsapp(telefone, texto_resposta)
 
     return jsonify({"status": "mensagem_processada"}), 200
