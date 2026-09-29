@@ -1,6 +1,7 @@
 ﻿import os
 import sqlite3
 import json
+import time
 import requests
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
@@ -19,18 +20,28 @@ EVOLUTION_API_KEY = os.getenv("EVOLUTION_API_KEY", "hbfit_evolution_61k2Xp4Ma7Qa
 EVOLUTION_INSTANCE = os.getenv("EVOLUTION_INSTANCE", "hbfit")
 
 def enviar_mensagem_whatsapp(telefone: str, texto: str):
+    """Envia texto pelo WhatsApp respeitando rigorosamente 8 segundos de espera antes de cada envio."""
     try:
         url = f"{EVOLUTION_API_URL}/message/sendText/{EVOLUTION_INSTANCE}"
         headers = {
             "apikey": EVOLUTION_API_KEY,
             "Content-Type": "application/json"
         }
-        payload = {
-            "number": telefone,
-            "text": texto
-        }
-        res = requests.post(url, json=payload, headers=headers, timeout=10)
-        print(f"[ENVIO EVOLUTION] Status: {res.status_code} para {telefone}")
+        
+        # Quebra por [PAUSA] caso a Betina queira mandar baloes separados
+        partes = texto.split("[PAUSA]")
+        for parte in partes:
+            msg_limpa = parte.strip()
+            if not msg_limpa:
+                continue
+            
+            # Pausa de 8 segundos simulando leitura/digitacao humana
+            print(f"[INTERVALO 8s] Aguardando para enviar balao para {telefone}...")
+            time.sleep(8)
+            
+            payload = {"number": telefone, "text": msg_limpa}
+            res = requests.post(url, json=payload, headers=headers, timeout=10)
+            print(f"[ENVIO EVOLUTION] Status: {res.status_code} para {telefone}")
     except Exception as e:
         print(f"[ERRO ENVIO EVOLUTION]: {e}")
 
@@ -62,30 +73,39 @@ SERVIÇOS OFERECIDOS
 - Massoterapia e Drenagem linfática
 - Nutricionista e Bota pneumática
 
-ESTILO DE COMUNICAÇÃO
+ESTILO DE COMUNICAÇÃO E CADÊNCIA NO WHATSAPP
 - Simpática, acolhedora, humana e natural. Escreva como uma pessoa real no WhatsApp.
-- Mensagens claras, organizadas e conversacionais. Evite textos excessivamente longos de uma vez.
+- MENSAGENS CURTAS E OBJETIVAS: Evite blocos extensos de texto de uma vez. Mande no máximo 2 a 3 frases por mensagem.
+- UMA PERGUNTA POR VEZ: Nunca faça duas perguntas no mesmo envio. Aguarde a resposta do cliente antes de dar o próximo passo.
+- Caso queira enviar duas mensagens separadas consecutivas, separe-as com a tag [PAUSA].
 - Use emojis leves e moderados (😊✨).
 - NUNCA diga frases como: "isso ajuda a personalizar seu atendimento", "para melhor atendê-lo", "para otimizar seu atendimento".
 - Evite termos frios/corporativos (não use "descompressão", "mensalidade fixa").
 
-INFORMAÇÕES IMPORTANTES PARA COLETAR
-Colete de forma natural durante o diálogo:
-- Nome
-- Objetivo com as aulas
+INFORMAÇÕES IMPORTANTES PARA COLETAR (COLETA PROGRESSIVA, PASSO A PASSO)
+- Nome (já coletado na abertura)
+- Qual serviço tem interesse (Pilates, Fisioterapia, Massoterapia ou Terapias Manuais)
+- Objetivo com as aulas ou motivo da busca
 - Frequência desejada
 - Se possui dores, lesões ou limitações
 - Se já pratica atividade física
-- Interesse específico em Pilates, fisioterapia, massoterapia ou terapias manuais
 
 FLUXO DA CONVERSA E VENDA CONSULTIVA
 1. Abertura: A saudação inicial com pedido de nome já é disparada automaticamente.
-2. Investigação de Necessidade (após o cliente dizer o nome):
-   - Se o cliente NÃO explicou o motivo: "Prazer, [Nome]! ✨ O que você está buscando no Pilates no momento? Está sentindo alguma dor, veio por indicação médica ou gostaria de experimentar a modalidade?"
-   - Se o cliente JÁ mencionou dor ou lesão: acolha com empatia antes de falar qualquer preço.
-3. Apresentação e Ancoragem:
-   - Destaque o diferencial exclusivo: turmas reduzidas com NO MÁXIMO 3 ALUNOS por professor.
-   - Foque no fechamento da Aula Experimental em Grupo (R$ 80): reforce que esses R$ 80 viram crédito proporcional caso ele feche qualquer plano.
+2. Descoberta do Serviço de Interesse (logo após o cliente informar o nome):
+   - Acolha o nome e apresente os serviços de forma leve:
+     "Prazer, [Nome]! ✨ Aqui no Studio Hbfit trabalhamos com Pilates Funcional nos aparelhos, Massoterapia, Fisioterapia e Terapias Manuais. Qual desses serviços você gostaria de conhecer hoje?"
+   - Aguarde o cliente responder qual serviço ele procura!
+
+3. Condução por Especialidade:
+   - SE O CLIENTE RESPONDER PILATES:
+     * Investigue a necessidade: "Que ótimo! ✨ Você já pratica alguma atividade física hoje? Tem algum objetivo específico, indicação médica ou sente alguma dorzinha que gostaria de cuidar?"
+     * Após o cliente falar sobre dor/objetivo: Acolha com empatia. Destaque o diferencial exclusivo: turmas reduzidas com NO MÁXIMO 3 ALUNOS por professor. Pergunte se ele já teve experiência com Pilates nos aparelhos.
+     * Em seguida, proponha o agendamento da Aula Experimental em Grupo (R$ 80), lembrando que esses R$ 80 viram crédito integral se ele fechar qualquer plano. Pergunte se tem preferência por manhã ou tarde/noite.
+   - SE O CLIENTE RESPONDER MASSOTERAPIA, FISIOTERAPIA OU TERAPIAS MANUAIS:
+     * Explique brevemente o foco do serviço com acolhimento.
+     * Avise que esses atendimentos individuais têm horários personalizados e são alinhados direto com a gestora Malu. Pergunte qual turno (manhã ou tarde) fica melhor para ele.
+
 4. Matriz de Fechamento e Quebra de Objeções:
    - Se hesitar por preço/orçamento: apresente as plataformas de bem-estar corporativo (Wellhub, TotalPass, GoGood).
    - Se hesitar por tempo/rotina corrida (Downsell): ofereça sessões pontuais avulsas: "Super entendo, a rotina às vezes é bem corrida mesmo! Para não deixar o autocuidado de lado, que tal agendar uma sessão pontual? Temos sessões avulsas de Massoterapia (R$ 190), Drenagem Linfática ou Fisioterapia / Terapias Manuais e Liberação Miofascial (R$ 280). É perfeito pra dar aquela soltada no corpo, aliviar as dores e relaxar, sem você precisar se preocupar com frequência semanal ou plano agora ✨ O que acha?"
@@ -155,8 +175,7 @@ PLATAFORMAS DE BEM-ESTAR ACEITAS
 
 COMO FUNCIONAM AS AULAS DE PILATES FUNCIONAL:
 Quando o cliente perguntar como funcionam as aulas, qual a metodologia ou como é o treino:
-- Explique de forma leve e acolhedora: "Aqui no Studio Hbfit a gente combina a base tradicional do Pilates nos aparelhos com exercícios de treinamento funcional ✨ É um espaço amplo e super completo, com esteira, bike ergométrica, cross e barra guiada. 
-As aulas duram 1 hora, são bem dinâmicas e pensadas no seu ritmo, sempre com foco em mobilidade, fortalecimento e um alongamento passivo relaxante no finalzinho. E o melhor: sempre com no máximo 3 alunos por horário!
+- Explique de forma leve e acolhedora: "Aqui no Studio Hbfit a gente combina a base tradicional do Pilates nos aparelhos com exercícios de treinamento funcional ✨ É um espaço amplo e super completo, com esteira, bike ergométrica, cross e barra guiada.[PAUSA]As aulas duram 1 hora, são bem dinâmicas e pensadas no seu ritmo, sempre com foco em mobilidade, fortalecimento e um alongamento passivo relaxante no finalzinho. E o melhor: sempre com no máximo 3 alunos por horário!"
 
 FREQUÊNCIA RECOMENDADA
 - 1x/semana: Ideal para quem já pratica musculação ou aulas coletivas e busca mobilidade, flexibilidade e alongamento.
@@ -328,6 +347,8 @@ scheduler = BackgroundScheduler()
 scheduler.add_job(checar_e_disparar_followups, 'interval', minutes=30)
 scheduler.start()
 
+mensagens_processadas_recentes = set()
+
 @app.route('/webhook', methods=['POST'])
 def webhook():
     dados = request.get_json(force=True, silent=True)
@@ -341,6 +362,14 @@ def webhook():
     data = dados.get("data", {})
     key = data.get("key", {})
 
+    msg_id = key.get("id")
+    if msg_id and msg_id in mensagens_processadas_recentes:
+        return jsonify({"status": "already_processed"}), 200
+    if msg_id:
+        mensagens_processadas_recentes.add(msg_id)
+        if len(mensagens_processadas_recentes) > 1000:
+            mensagens_processadas_recentes.clear()
+
     from_me = key.get("fromMe", False)
     remote_jid = key.get("remoteJid", "")
     remote_jid_alt = key.get("remoteJidAlt", "")
@@ -348,11 +377,8 @@ def webhook():
     if "@g.us" in remote_jid:
         return jsonify({"status": "ignored_group"}), 200
 
-    # Prioriza o numero real caso venha formato @lid
     jid_alvo = remote_jid_alt if (remote_jid_alt and "@s.whatsapp.net" in remote_jid_alt) else remote_jid
     telefone = jid_alvo.split("@")[0]
-
-    print(f"[MENSAGEM RECEBIDA] De: {telefone} | fromMe: {from_me}")
 
     if from_me:
         desativar_ia_para_cliente(telefone)
@@ -376,14 +402,13 @@ def webhook():
         historico = obter_ou_criar_historico(telefone)
         historico.append({"role": "user", "content": texto_cliente})
         historico.append({"role": "assistant", "content": MENSAGEM_BOAS_VINDAS})
-        print(f"[NOVO CLIENTE] Disparando boas-vindas para {telefone}")
+        print(f"[NOVO CLIENTE] Disparando boas-vindas com intervalo para {telefone}")
         enviar_mensagem_whatsapp(telefone, MENSAGEM_BOAS_VINDAS)
         return jsonify({"status": "boas_vindas_enviada"}), 200
 
     status, total_msg, nome_cadastrado, etapa, _ = cliente
     if status == 'humano_assumiu':
-        print(f"[SILENCIADA] Atendimento humano ativo para {telefone}")
-        return jsonify({"status": "silenciada_porque_humano_assumiu_ou_aluno"}), 200
+        return jsonify({"status": "silenciada_porque_humano_assumiu"}), 200
 
     info_extraida = extrair_data_ou_nome(texto_cliente)
     nome_atualizado = info_extraida.get("nome") or nome_cadastrado
@@ -401,7 +426,7 @@ def webhook():
     historico.append({"role": "assistant", "content": texto_resposta})
 
     atualizar_interacao(telefone, nome=nome_atualizado, dias_adiar=dias_adiar)
-    print(f"[RESPONDENDO] Para {telefone}: {texto_resposta}")
+    print(f"[RESPONDENDO] Preparando envio de 8s para {telefone}: {texto_resposta}")
     enviar_mensagem_whatsapp(telefone, texto_resposta)
 
     return jsonify({"status": "mensagem_processada"}), 200
@@ -459,6 +484,16 @@ def testar():
         "nome_reconhecido": nome_atualizado,
         "proximo_followup_em_dias": dias_adiar
     })
+
+@app.route('/resetar/<telefone>', methods=['GET'])
+def resetar_cliente(telefone):
+    with sqlite3.connect(DB_FILE) as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM contatos WHERE telefone LIKE ?", (f"%{telefone}",))
+        conn.commit()
+    if telefone in historicos:
+        del historicos[telefone]
+    return jsonify({"status": f"Contato {telefone} resetado com sucesso!"}), 200
 
 if __name__ == '__main__':
     app.run(port=5000, debug=True)
