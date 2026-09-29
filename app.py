@@ -18,7 +18,11 @@ EVOLUTION_API_URL = os.getenv("EVOLUTION_API_URL", "http://evolution-api:8080")
 EVOLUTION_API_KEY = os.getenv("EVOLUTION_API_KEY", "hbfit_evolution_61k2Xp4Ma7Qa")
 EVOLUTION_INSTANCE = os.getenv("EVOLUTION_INSTANCE", "hbfit")
 
-def enviar_mensagem_whatsapp(telefone: str, texto: str):
+# ID do Grupo Notificações LEAD - HBFIT
+GRUPO_NOTIFICACOES_JID = "120363421453558461@g.us"
+
+def enviar_mensagem_whatsapp(destinatario: str, texto: str):
+    """Envia texto pelo WhatsApp aguardando 8s antes do envio."""
     try:
         url = f"{EVOLUTION_API_URL}/message/sendText/{EVOLUTION_INSTANCE}"
         headers = {
@@ -32,14 +36,31 @@ def enviar_mensagem_whatsapp(telefone: str, texto: str):
             if not msg_limpa:
                 continue
             
-            print(f"[PAUSA HUMANA 8s] Aguardando para enviar balão para {telefone}...")
-            time.sleep(8)
+            # Pausa apenas para conversas individuais (não atrasa alertas de grupos internos)
+            if not destinatario.endswith("@g.us"):
+                print(f"[PAUSA HUMANA 8s] A aguardar envio para {destinatario}...")
+                time.sleep(8)
             
-            payload = {"number": telefone, "text": msg_limpa}
+            payload = {"number": destinatario, "text": msg_limpa}
             res = requests.post(url, json=payload, headers=headers, timeout=10)
-            print(f"[ENVIO EVOLUTION] Status: {res.status_code} para {telefone}")
+            print(f"[ENVIO EVOLUTION] Estado: {res.status_code} para {destinatario}")
     except Exception as e:
         print(f"[ERRO ENVIO EVOLUTION]: {e}")
+
+def notificar_grupo_lead(nome: str, telefone: str, mensagem_cliente: str):
+    """Dispara alerta imediato no grupo de Notificações LEAD."""
+    nome_exibicao = nome if nome else "Não informado"
+    telefone_limpo = telefone.replace("+", "").replace("-", "").replace(" ", "")
+    
+    alerta = (
+        f"🔔 *NOVO AGENDAMENTO DE EXPERIMENTAL!*\n\n"
+        f"👤 *Nome:* {nome_exibicao}\n"
+        f"📱 *WhatsApp:* https://wa.me/{telefone_limpo}\n"
+        f"💬 *Mensagem do Lead:* \"{mensagem_cliente}\"\n\n"
+        f"⚠️ *Nota:* A Betina foi desligada para este contacto para permitir que assumas o atendimento!"
+    )
+    print(f"[ALERTA GRUPO] A disparar notificação de agendamento de {nome_exibicao}...")
+    enviar_mensagem_whatsapp(GRUPO_NOTIFICACOES_JID, alerta)
 
 DB_FILE = "clientes.db"
 historicos = {}
@@ -101,6 +122,7 @@ FLUXO DA CONVERSA E VENDA CONSULTIVA
      * Investigue a necessidade: "Que ótimo! ✨ Você já pratica alguma atividade física hoje? Tem algum objetivo específico, indicação médica ou sente alguma dorzinha que gostaria de cuidar?"
      * Após o cliente falar sobre dor/objetivo: Acolha com empatia. Destaque o diferencial exclusivo de turmas reduzidas (máximo 3 alunos por professor).
      * Em seguida, proponha o agendamento da Aula Experimental em Grupo (R$ 80), lembrando que esse valor vira crédito integral caso feche qualquer plano. Pergunte se prefere período da manhã ou tarde/noite.
+     * Quando o cliente confirmar que quer agendar ou disser a preferência de horário/dia: Agradeça com carinho e informe que a Malu já vai confirmar o horário exacto na grade.
 
    - SE O CLIENTE RESPONDER FISIOTERAPIA OU MENCIONAR LESÃO ESPECÍFICA (ex: menisco, hérnia, pós-cirúrgico, dor articular aguda):
      * Acolha com empatia genuína e investigue o histórico clínico antes de passar horários:
@@ -139,30 +161,18 @@ Aula Experimental em Grupo: R$ 80 (abatida integralmente caso feche plano)
 Personal Pilates: 4 aulas R$ 600 | 8 aulas R$ 960 | 12 aulas R$ 1.320
 Avaliação Fisioterapêutica Individual: R$ 150
 Fisioterapia avulsa: R$ 210 | Pacote com 4: R$ 720 | Pacote com 8: R$ 1.280 | Kinesiotape: R$ 75
-Terapias Manuais (Quiropraxia, Osteopatia, Liberação): R$ 280 | Pacote com 4: R$ 1.000
+Terapias Manuais: R$ 280 | Pacote com 4: R$ 1.000
 Bota Pneumática: Avulsa R$ 110 | Pacote com 4: R$ 360
-Massoterapia: Avulsa R$ 190 | Pacote com 4: R$ 680 | Pacote com 6: R$ 960 | Hidromassagem pés: R$ 50
+Massoterapia: Avulsa R$ 190 | Pacote com 4: R$ 680 | Pacote com 6: R$ 960
 
 PLATAFORMAS DE BEM-ESTAR ACEITAS
 - WellHub: Agendamento direto pelo app (mínimo 1h de antecedência) e check-in ao chegar. Planos: Gold+, Platinum, Diamond, Diamond+.
 - TotalPass: Agendamento direto pelo app (mínimo 1h de antecedência) e check-in ao chegar. Planos: T5+.
 - GoGood: Agendamento via WhatsApp e validação de QR Code presencial com o professor. Planos: Premium, Elite.
 
-FREQUÊNCIA RECOMENDADA
-- 1x/semana: Mobilidade, flexibilidade e alongamento complementar à musculação.
-- 2x/semana: Indicado para fortalecimento e mobilidade de praticantes de corrida e ciclismo.
-- 3x/semana: Treino mais completo, substituindo outras atividades físicas.
-
 REGRAS INTERNAS, FALTAS E REPOSIÇÕES
 - Meias opcionais. Trazer toalha e garrafinha. Estacionamento cortesia durante a aula.
 - Cancelamentos com no mínimo 4h de antecedência. Reposição dentro do mesmo mês.
-
-REGRA INEGOCIÁVEL SOBRE PREÇOS E VALORES:
-- Se perguntar valores ANTES de falar objetivo/dores: segure com simpatia ("Com certeza te passo todos os detalhes! Mas me conta: você já pratica atividade hoje ou tem alguma queixa específica?").
-
-QUANDO ENCAMINHAR PARA ATENDIMENTO HUMANO (MALU)
-- Agendamento de fisioterapia, terapias manuais ou massoterapia.
-- Sublocação de salas, negociações contratuais fora do padrão, vagas da grade e fechamento de horários.
 
 REGRAS FINAIS
 - Nunca invente informações e nunca fale sobre assuntos fora do studio.
@@ -221,7 +231,6 @@ def atualizar_interacao(telefone: str, nome: str = None, dias_adiar: int = 7):
     proximo_contato = (agora + timedelta(days=dias_adiar)).isoformat()
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
-        # Ao interagir novamente, o lembrete volta para 0 caso a pessoa pare de novo no futuro
         if nome:
             cursor.execute("""
                 UPDATE contatos SET mensagens_enviadas = mensagens_enviadas + 1, nome = ?, data_proximo_contato = ?, atualizado_em = ?, lembrete_enviado = 0
@@ -234,23 +243,24 @@ def atualizar_interacao(telefone: str, nome: str = None, dias_adiar: int = 7):
             """, (proximo_contato, agora.isoformat(), telefone))
         conn.commit()
 
-def extrair_data_ou_nome(texto_usuario: str):
-    prompt_extracao = f"""Analise a mensagem do cliente e retorne APENAS um JSON:
-1. "nome": Nome informado pelo cliente (se o cliente disse apenas seu nome, como 'Malu', 'Maria', 'Sou a Joana', capture aqui. Se ele não informou o nome, retorne null).
-2. "dias_adiar": Se mencionou viagem ou pediu para falar mais tarde, extraia os dias corridos. Caso contrário, 7.
+def analisar_mensagem_e_intencao(texto_usuario: str, nome_existente: str = None):
+    prompt_analise = f"""Analise a última mensagem do cliente no WhatsApp e retorne APENAS um JSON:
+1. "nome": Nome do cliente (se ele informou aqui ou se já temos '{nome_existente}').
+2. "dias_adiar": Se mencionou viagem ou pediu contacto mais tarde, extraia os dias corridos. Caso contrário, 7.
+3. "quer_agendar": true se o cliente confirmou que quer agendar a experimental/sessão, informou dias livres (ex: 'quinta de manhã', 'prefiro à tarde', 'pode ser amanhã') ou pediu para falar com um atendente humano para fechar horário. Caso contrário, false.
 
 Mensagem: "{texto_usuario}"
-Formato esperado: {{"nome": "NomeOuNull", "dias_adiar": 7}}"""
+Formato esperado: {{"nome": "NomeOuNull", "dias_adiar": 7, "quer_agendar": false}}"""
     try:
         res = client.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt_extracao}],
+            messages=[{"role": "user", "content": prompt_analise}],
             response_format={"type": "json_object"},
             temperature=0
         )
         return json.loads(res.choices[0].message.content)
     except:
-        return {"nome": None, "dias_adiar": 7}
+        return {"nome": nome_existente, "dias_adiar": 7, "quer_agendar": False}
 
 def obter_ou_criar_historico(telefone: str):
     if telefone not in historicos:
@@ -268,7 +278,7 @@ def checar_e_disparar_lembretes_e_followups():
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
         
-        # 1. Lembrete de 30 minutos PARA QUALQUER PESSOA QUE PAROU DE RESPONDER
+        # 1. Lembrete de 30 minutos
         cursor.execute("""
             SELECT telefone, nome, atualizado_em FROM contatos
             WHERE status = 'ia_ativa' AND lembrete_enviado = 0 AND atualizado_em IS NOT NULL
@@ -277,20 +287,20 @@ def checar_e_disparar_lembretes_e_followups():
         for tel, nome, atualizado_em in parados:
             try:
                 data_envio = datetime.fromisoformat(atualizado_em)
-                if (agora - data_envio).total_seconds() >= 1800: # 30 minutos
+                if (agora - data_envio).total_seconds() >= 1800:
                     if nome:
                         msg_lembrete = f"Oi, {nome}! Passando só para ver se você conseguiu ver minha última mensagem por aí 😊 Se quiser dar continuidade, estou por aqui! ✨"
                     else:
                         msg_lembrete = "Oi! Passando só para ver se você conseguiu ver minha mensagem por aí 😊 Se quiser dar continuidade, é só me dizer seu nome que te passo todas as informações do estúdio ✨"
                     
-                    print(f"[LEMBRETE 30 MIN DISPARADO] Para {tel}: {msg_lembrete}")
+                    print(f"[LEMBRETE 30 MIN DISPARADO] Para {tel}")
                     enviar_mensagem_whatsapp(tel, msg_lembrete)
                     cursor.execute("UPDATE contatos SET lembrete_enviado = 1, atualizado_em = ? WHERE telefone = ?", (agora.isoformat(), tel))
                     conn.commit()
             except Exception as e:
                 print(f"[ERRO LEMBRETE 30M]: {e}")
 
-        # 2. Follow-ups normais de 7 e 14 dias
+        # 2. Follow-ups de 7 e 14 dias
         cursor.execute("""
             SELECT telefone, nome, etapa_followup, data_proximo_contato 
             FROM contatos 
@@ -304,7 +314,7 @@ def checar_e_disparar_lembretes_e_followups():
             if agora >= data_alvo:
                 nome_formatado = f", {nome}" if nome else ""
                 if etapa == 0:
-                    msg = f"Oi{nome_formatado}! Passando para saber como você está e se conseguiu dar uma olhadinha na sua rotina para vir nos conhecer ✨ A Malu está organizando a grade das turmas e lembrei de você. Se quiser experimentar uma aula essa semana, me dá um toque que vejo um horário bem tranquilo pra você!"
+                    msg = f"Oi{nome_formatado}! Passando para saber como você está e se conseguiu dar uma olhadinha na sua rotina para vir nos conhecer ✨ Estamos organizando a grade das turmas e lembramos de você. Se quiser experimentar uma aula essa semana, me dá um toque que vejo um horário bem tranquilo pra você!"
                     proxima_data = (agora + timedelta(days=7)).isoformat()
                     nova_etapa = 1
                 elif etapa == 1:
@@ -322,7 +332,6 @@ def checar_e_disparar_lembretes_e_followups():
 
 inicializar_banco()
 
-# Intervalo checando a cada 5 minutos para maior precisao
 scheduler = BackgroundScheduler()
 scheduler.add_job(checar_e_disparar_lembretes_e_followups, 'interval', minutes=5)
 scheduler.start()
@@ -354,6 +363,7 @@ def webhook():
     remote_jid = key.get("remoteJid", "")
     remote_jid_alt = key.get("remoteJidAlt", "")
 
+    # Ignora mensagens enviadas dentro de grupos (evita loops)
     if "@g.us" in remote_jid:
         return jsonify({"status": "ignored_group"}), 200
 
@@ -362,7 +372,7 @@ def webhook():
 
     if from_me:
         desativar_ia_para_cliente(telefone)
-        print(f"[ATENDIMENTO HUMANO] Malu digitou para {telefone}. Betina desligada.")
+        print(f"[ATENDIMENTO HUMANO] A Malu escreveu para {telefone}. Betina desligada.")
         return jsonify({"status": "humano_assumiu"}), 200
 
     message_obj = data.get("message", {})
@@ -382,7 +392,7 @@ def webhook():
         historico = obter_ou_criar_historico(telefone)
         historico.append({"role": "user", "content": texto_cliente})
         historico.append({"role": "assistant", "content": MENSAGEM_BOAS_VINDAS})
-        print(f"[NOVO CLIENTE] Enviando boas-vindas para {telefone}")
+        print(f"[NOVO CLIENTE] A enviar boas-vindas para {telefone}")
         enviar_mensagem_whatsapp(telefone, MENSAGEM_BOAS_VINDAS)
         return jsonify({"status": "boas_vindas_enviada"}), 200
 
@@ -390,9 +400,10 @@ def webhook():
     if status == 'humano_assumiu':
         return jsonify({"status": "silenciada_porque_humano_assumiu"}), 200
 
-    info_extraida = extrair_data_ou_nome(texto_cliente)
-    nome_atualizado = info_extraida.get("nome") or nome_cadastrado
-    dias_adiar = info_extraida.get("dias_adiar", 7)
+    info_analise = analisar_mensagem_e_intencao(texto_cliente, nome_cadastrado)
+    nome_atualizado = info_analise.get("nome") or nome_cadastrado
+    dias_adiar = info_analise.get("dias_adiar", 7)
+    quer_agendar = info_analise.get("quer_agendar", False)
 
     if not nome_atualizado:
         msg_exige_nome = "Prazer! ✨ Antes de te passar todos os detalhes, qual é o seu nome?"
@@ -420,6 +431,12 @@ def webhook():
     print(f"[RESPONDENDO] Envio para {telefone}: {texto_resposta}")
     enviar_mensagem_whatsapp(telefone, texto_resposta)
 
+    # DISPARO PARA O GRUPO INTERNO SE O LEAD QUISER AGENDAR
+    if quer_agendar:
+        notificar_grupo_lead(nome_atualizado, telefone, texto_cliente)
+        desativar_ia_para_cliente(telefone)
+        print(f"[HANDOVER] Lead {nome_atualizado} encaminhado para o grupo. Betina pausada para {telefone}.")
+
     return jsonify({"status": "mensagem_processada"}), 200
 
 @app.route('/resetar/<telefone>', methods=['GET'])
@@ -430,7 +447,7 @@ def resetar_cliente(telefone):
         conn.commit()
     if telefone in historicos:
         del historicos[telefone]
-    return jsonify({"status": f"Contato {telefone} resetado com sucesso!"}), 200
+    return jsonify({"status": f"Contacto {telefone} resetado com sucesso!"}), 200
 
 if __name__ == '__main__':
     app.run(port=5000, debug=True)
