@@ -69,7 +69,11 @@ def notificar_grupo_lead(nome: str, telefone: str, mensagem_cliente: str):
     print(f"[ALERTA GRUPO] A disparar notificação de agendamento de {nome_exibicao}...")
     enviar_mensagem_whatsapp(GRUPO_NOTIFICACOES_JID, alerta)
 
-DB_FILE = "clientes.db"
+# Garante persistência se estiver rodando no Easypanel (/app/data)
+# ou salva na pasta local se estiver rodando no seu computador
+PASTA_DADOS = "/app/data" if os.path.exists("/app") else "."
+os.makedirs(PASTA_DADOS, exist_ok=True)
+DB_FILE = os.path.join(PASTA_DADOS, "clientes.db")
 historicos = {}
 
 MENSAGEM_BOAS_VINDAS = "Oi 😊 Seja bem-vindo(a) ao Studio Hbfit! Sou Betina, vou realizar seu atendimento por aqui, qual é o seu nome?"
