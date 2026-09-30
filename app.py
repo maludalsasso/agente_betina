@@ -21,31 +21,38 @@ EVOLUTION_INSTANCE = os.getenv("EVOLUTION_INSTANCE", "hbfit")
 # ID do Grupo Notificações LEAD - HBFIT
 GRUPO_NOTIFICACOES_JID = "120363421453558461@g.us"
 
-def enviar_mensagem_whatsapp(destinatario: str, texto: str):
-    """Envia texto pelo WhatsApp aguardando 8s antes do envio."""
-    try:
-        url = f"{EVOLUTION_API_URL}/message/sendText/{EVOLUTION_INSTANCE}"
-        headers = {
-            "apikey": EVOLUTION_API_KEY,
-            "Content-Type": "application/json"
-        }
-        
-        partes = texto.split("[PAUSA]")
-        for parte in partes:
-            msg_limpa = parte.strip()
-            if not msg_limpa:
-                continue
-            
-            # Pausa apenas para conversas individuais (não atrasa alertas de grupos internos)
-            if not destinatario.endswith("@g.us"):
-                print(f"[PAUSA HUMANA 8s] A aguardar envio para {destinatario}...")
-                time.sleep(8)
-            
-            payload = {"number": destinatario, "text": msg_limpa}
-            res = requests.post(url, json=payload, headers=headers, timeout=10)
-            print(f"[ENVIO EVOLUTION] Estado: {res.status_code} para {destinatario}")
-    except Exception as e:
-        print(f"[ERRO ENVIO EVOLUTION]: {e}")
+def enviar_mensagem_whatsapp(
+    destinatario: str, texto: str, verificar_status: bool = True
+):
+  try:
+    url = f"{EVOLUTION_API_URL}/message/sendText/{EVOLUTION_INSTANCE}"
+    headers = {"apikey": EVOLUTION_API_KEY, "Content-Type": "application/json"}
+
+    partes = texto.split("[PAUSA]")
+    for parte in partes:
+      msg_limpa = parte.strip()
+      if not msg_limpa:
+        continue
+
+      if not destinatario.endswith("@g.us"):
+        print(f"[PAUSA HUMANA 8s] Aguardando envio para {destinatario}...")
+        time.sleep(8)
+
+        # CHECAGEM DE SEGURANÇA: Se o humano assumiu DURANTE a pausa de 8s, cancela o envio!
+        if verificar_status:
+          cliente_check = consultar_cliente(destinatario)
+          if cliente_check and cliente_check[0] == "humano_assumiu":
+            print(
+                f"[ENVIO ABORTADO] Humano assumiu {destinatario} durante a"
+                " pausa. Mensagem cancelada."
+            )
+            return
+
+      payload = {"number": destinatario, "text": msg_limpa}
+      res = requests.post(url, json=payload, headers=headers, timeout=10)
+      print(f"[ENVIO EVOLUTION] Estado: {res.status_code} para {destinatario}")
+  except Exception as e:
+    print(f"[ERRO ENVIO EVOLUTION]: {e}")
 
 def notificar_grupo_lead(nome: str, telefone: str, mensagem_cliente: str):
     """Dispara alerta imediato no grupo de Notificações LEAD."""
