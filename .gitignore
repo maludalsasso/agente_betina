@@ -1,5 +1,19 @@
-﻿venv/
+# Ambientes virtuais
+venv/
+.venv/
+env/
+
+# Ficheiros de ambiente e variáveis secretas
 .env
+.env.local
+
+# Ficheiros de cache do Python
 __pycache__/
 *.pyc
+
+# Bases de dados SQLite e dados persistentes
 clientes.db
+*.db
+*.sqlite3
+data/
+/app/data
