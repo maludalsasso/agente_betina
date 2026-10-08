@@ -60,11 +60,11 @@ def notificar_grupo_lead(nome: str, telefone: str, mensagem_cliente: str):
     telefone_limpo = telefone.replace("+", "").replace("-", "").replace(" ", "")
     
     alerta = (
-        f"🔔 *NOVO AGENDAMENTO DE EXPERIMENTAL!*\n\n"
+        f"🔔 *NOVO AGENDAMENTO!*\n\n"
         f"👤 *Nome:* {nome_exibicao}\n"
         f"📱 *WhatsApp:* https://wa.me/{telefone_limpo}\n"
         f"💬 *Mensagem do Lead:* \"{mensagem_cliente}\"\n\n"
-        f"⚠️ *Nota:* A Betina foi desligada para este contacto para permitir que assumas o atendimento!"
+        f"⚠️ *Nota:* A Betina foi desligada para permitir que você assuma o atendimento!"
     )
     print(f"[ALERTA GRUPO] A disparar notificação de agendamento de {nome_exibicao}...")
     enviar_mensagem_whatsapp(GRUPO_NOTIFICACOES_JID, alerta)
@@ -135,11 +135,11 @@ FLUXO DA CONVERSA E VENDA CONSULTIVA
      * Em seguida, proponha o agendamento da Aula Experimental em Grupo (R$ 80), lembrando que esse valor vira crédito integral caso feche qualquer plano. Pergunte se prefere período da manhã ou tarde/noite.
      * Quando o cliente confirmar que quer agendar ou disser a preferência de horário/dia: Agradeça com carinho e informe que a Malu já vai confirmar o horário exacto na grade.
 
-   - SE O CLIENTE RESPONDER FISIOTERAPIA OU MENCIONAR LESÃO ESPECÍFICA (ex: menisco, hérnia, pós-cirúrgico, dor articular aguda):
-     * Acolha com empatia genuína e investigue o histórico clínico antes de passar horários:
-       Pergunte se já consultou um médico, se tem encaminhamento clínico, exames de imagem ou se precisa de uma avaliação fisioterapêutica inicial.
-     * Na resposta seguinte: Apresente a Avaliação Fisioterapêutica Individual (R$ 150) como a etapa indispensável para traçar o protocolo correto.
-     * Em seguida: Pergunte qual período (manhã ou tarde) fica melhor na rotina dela para a gestora Malu confirmar o horário com o fisioterapeuta.
+   - SE O CLIENTE PROCURA PILATES (MESMO COM INDICAÇÃO MÉDICA OU HISTÓRICO DE qualquer lesão (DOR/COLUNA/HÉRNIA):
+     * Acolha com muita segurança e empatia! Explique que as turmas de Pilates Funcional têm no máximo 3 alunos por professor e que os exercícios são adaptados individualmente para as limitações e recomendações médicas de cada um.
+     * NUNCA OBRIGUE o cliente a fazer Avaliação Fisioterapêutica para começar o Pilates. O caminho padrão é convidá-lo diretamente para a Aula Experimental em Grupo (R$ 80, abatida integralmente na matrícula).
+     * Só ofereça a Avaliação Fisioterapêutica Individual (R$ 150) se o próprio cliente disser que está em crise aguda de dor, travado, em recuperação pós-cirúrgica imediata ou se ele pedir expressamente uma consulta de Fisioterapia.
+     * Pergunte se prefere fazer a experimental no período da manhã ou da tarde/noite para verificar a grade com a Malu.
 
    - SE O CLIENTE RESPONDER MASSOTERAPIA OU TERAPIAS MANUAIS:
      * Explique brevemente o foco relaxante ou terapêutico com acolhimento.
@@ -160,7 +160,7 @@ TABELA DE VALORES E PLANOS
 Pilates em Grupo (até 3 alunos por turma):
 - Mensal:
   * 1x/semana — R$ 320
-  * 2x/semana — R$ 480
+  * 2x/semana — R$ 490
   * 3x/semana — R$ 630
 - Semestral:
   * 1x/semana — R$ 290
@@ -223,8 +223,24 @@ def desativar_ia_para_cliente(telefone: str):
 def consultar_cliente(telefone: str):
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
+        # 1. Tenta a busca direta
         cursor.execute("SELECT status, mensagens_enviadas, nome, etapa_followup, data_proximo_contato, atualizado_em, lembrete_enviado FROM contatos WHERE telefone = ?", (telefone,))
-        return cursor.fetchone()
+        resultado = cursor.fetchone()
+        if resultado:
+            return resultado
+
+        # 2. Se não encontrou, busca pelos últimos 8 dígitos (elimina erro de 9º dígito ou 55)
+        apenas_num = "".join(filter(str.isdigit, telefone))
+        if len(apenas_num) >= 8:
+            ultimos_8 = apenas_num[-8:]
+            cursor.execute("""
+                SELECT status, mensagens_enviadas, nome, etapa_followup, data_proximo_contato, atualizado_em, lembrete_enviado 
+                FROM contatos 
+                WHERE telefone LIKE ?
+            """, (f"%{ultimos_8}%",))
+            return cursor.fetchone()
+
+        return None
 
 def cadastrar_novo_cliente(telefone: str):
     agora = datetime.now()

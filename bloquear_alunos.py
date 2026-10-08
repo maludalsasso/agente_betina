@@ -1,7 +1,10 @@
-﻿import sqlite3
+﻿import os
+import sqlite3
 from datetime import datetime
 
-DB_FILE = "clientes.db"
+# Garante o mesmo caminho usado pelo app.py na VPS ou local
+PASTA_DADOS = "/app/data" if os.path.exists("/app/data") else "."
+DB_FILE = os.path.join(PASTA_DADOS, "clientes.db")
 
 telefones_alunos = [
     "48988379988",
@@ -61,29 +64,64 @@ telefones_alunos = [
 
 def bloquear_telefones():
     agora = datetime.now().isoformat()
+    
+    # Garante que a tabela exista se o banco for novo
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS contatos (
+                telefone TEXT PRIMARY KEY,
+                nome TEXT,
+                status TEXT DEFAULT 'ia_ativa',
+                mensagens_enviadas INTEGER DEFAULT 0,
+                etapa_followup INTEGER DEFAULT 0,
+                data_proximo_contato TEXT,
+                atualizado_em TEXT,
+                lembrete_enviado INTEGER DEFAULT 0
+            )
+        """)
+        conn.commit()
+
         inseridos = 0
         for tel in telefones_alunos:
             numero_limpo = "".join(filter(str.isdigit, tel))
-            if numero_limpo:
-                # Salva o formato normal e o formato com 55 (padrão WhatsApp)
-                variacoes = [numero_limpo]
-                if not numero_limpo.startswith("55"):
-                    variacoes.append(f"55{numero_limpo}")
-                
-                for n in variacoes:
-                    cursor.execute("""
-                        INSERT INTO contatos (telefone, status, etapa_followup, atualizado_em)
-                        VALUES (?, 'humano_assumiu', 2, ?)
-                        ON CONFLICT(telefone) DO UPDATE SET 
-                            status = 'humano_assumiu',
-                            etapa_followup = 2,
-                            atualizado_em = ?
-                    """, (n, agora, agora))
+            if not numero_limpo:
+                continue
+
+            # Retira o 55 se já tiver
+            if numero_limpo.startswith("55"):
+                numero_limpo = numero_limpo[2:]
+
+            ddd = numero_limpo[:2]
+            corpo = numero_limpo[2:]
+            
+            # Pega sempre os últimos 8 dígitos
+            ultimos_8 = corpo[-8:]
+
+            # Cria variações: com 9, sem 9, com 55 e só os 8 dígitos
+            variacoes = {
+                numero_limpo,
+                f"55{numero_limpo}",
+                ultimos_8,
+                f"{ddd}9{ultimos_8}",
+                f"55{ddd}9{ultimos_8}",
+                f"{ddd}{ultimos_8}",
+                f"55{ddd}{ultimos_8}"
+            }
+
+            for n in variacoes:
+                cursor.execute("""
+                    INSERT INTO contatos (telefone, status, etapa_followup, atualizado_em)
+                    VALUES (?, 'humano_assumiu', 2, ?)
+                    ON CONFLICT(telefone) DO UPDATE SET 
+                        status = 'humano_assumiu',
+                        etapa_followup = 2,
+                        atualizado_em = ?
+                """, (n, agora, agora))
                 inseridos += 1
+        
         conn.commit()
-    print(f"Sucesso: {inseridos} alunos cadastrados com proteção total no banco!")
+    print(f"Sucesso: {inseridos} formatos de números bloqueados no banco ({DB_FILE})!")
 
 if __name__ == '__main__':
     bloquear_telefones()
