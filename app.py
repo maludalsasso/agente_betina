@@ -1,4 +1,6 @@
-﻿import os
+﻿from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+import os
 import sqlite3
 import json
 import time
@@ -295,12 +297,18 @@ def obter_ou_criar_historico(telefone: str):
     return historicos[telefone]
 
 def checar_e_disparar_lembretes_e_followups():
-    agora = datetime.now()
-    dia_semana = agora.weekday()
-    hora_atual = agora.hour
+    fuso_br = ZoneInfo("America/Sao_Paulo")
+    agora_br = datetime.now(fuso_br)
 
-    if dia_semana > 4 or hora_atual < 7 or hora_atual >= 20:
+    dia_semana = agora_br.weekday()  # 0 = segunda, 4 = sexta, 5 = sábado, 6 = domingo
+    hora_atual = agora_br.hour
+
+    # Bloqueia fins de semana e qualquer horário antes das 08h ou a partir das 20h (Brasília)
+    if dia_semana > 4 or hora_atual < 8 or hora_atual >= 20:
         return
+
+    # Remove o fuso para comparar com as datas salvas no banco
+    agora = agora_br.replace(tzinfo=None)
 
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
