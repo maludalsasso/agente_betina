@@ -5,7 +5,6 @@ import sqlite3
 import json
 import time
 import requests
-from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify
 from openai import OpenAI
@@ -62,14 +61,14 @@ def notificar_grupo_lead(nome: str, telefone: str, mensagem_cliente: str):
     telefone_limpo = telefone.replace("+", "").replace("-", "").replace(" ", "")
     
     alerta = (
-        f"🔔 *NOVO AGENDAMENTO!*\n\n"
+        f"🔔 *NOVO PEDIDO DE AGENDAMENTO!*\n\n"
         f"👤 *Nome:* {nome_exibicao}\n"
         f"📱 *WhatsApp:* https://wa.me/{telefone_limpo}\n"
         f"💬 *Mensagem do Lead:* \"{mensagem_cliente}\"\n\n"
-        f"⚠️ *Nota:* A Betina foi desligada para permitir que você assuma o atendimento!"
+        f"⚠️ *Nota:* A Betina foi desligada para permitir que você assuma o atendimento e faça o agendamento!"
     )
     print(f"[ALERTA GRUPO] A disparar notificação de agendamento de {nome_exibicao}...")
-    enviar_mensagem_whatsapp(GRUPO_NOTIFICACOES_JID, alerta)
+    enviar_mensagem_whatsapp(GRUPO_NOTIFICACOES_JID, alerta, verificar_status=False)
 
 # Garante persistência se estiver rodando no Easypanel (/app/data)
 # ou salva na pasta local se estiver rodando no seu computador
@@ -82,6 +81,13 @@ MENSAGEM_BOAS_VINDAS = "Oi 😊 Seja bem-vindo(a) ao Studio Hbfit! Sou Betina, v
 
 PROMPT_BETINA = """Você é Betina, assistente virtual e consultora comercial do Studio de Pilates Funcional Hbfit, localizado no centro de Florianópolis/SC.
 Seu papel é atender clientes via WhatsApp de forma acolhedora, inteligente, organizada, persuasiva e humanizada, conduzindo os contatos com foco em agendamentos presenciais pelo studio e pela gestora Malu.
+
+REGRA ABSOLUTA DE AGENDAMENTO:
+- VOCÊ NÃO POSSUI ACESSO À AGENDA EM TEMPO REAL.
+- NUNCA agende, marque horários, confirme vagas ou reserve sessões de: AULA EXPERIMENTAL, MASSOTERAPIA, TERAPIAS MANUAIS ou FISIOTERAPIA / AVALIAÇÃO FISIOTERAPÊUTICA.
+- NUNCA invente ou diga que "a Malu confirmou", que "verificou a grade e tem horário", ou que "vai checar e já volta".
+- A marcação e conferência de horários de QUALQUER serviço são feitas EXCLUSIVAMENTE pela gestora Malu (humana).
+- Quando o cliente quiser marcar, perguntar de vaga ou fechar horário, informe gentilmente que a Malu entrará em contato para alinhar e agendar na grade.
 
 IDENTIDADE DO STUDIO
 - Nome: Studio de Pilates Funcional Hbfit
@@ -135,17 +141,20 @@ FLUXO DA CONVERSA E VENDA CONSULTIVA
      * Investigue a necessidade: "Que ótimo! ✨ Você já pratica alguma atividade física hoje? Tem algum objetivo específico, indicação médica ou sente alguma dorzinha que gostaria de cuidar?"
      * Após o cliente falar sobre dor/objetivo: Acolha com empatia. Destaque o diferencial exclusivo de turmas reduzidas (máximo 3 alunos por professor).
      * Em seguida, proponha o agendamento da Aula Experimental em Grupo (R$ 80), lembrando que esse valor vira crédito integral caso feche qualquer plano. Pergunte se prefere período da manhã ou tarde/noite.
-     * Quando o cliente confirmar que quer agendar ou disser a preferência de horário/dia: Agradeça com carinho e informe que a Malu já vai confirmar o horário exacto na grade.
+     * Quando o cliente confirmar que quer agendar ou disser a preferência de horário/dia: Agradeça com carinho e informe que a Malu já vai entrar em contato para verificar e confirmar o horário na grade com ele.
 
    - SE O CLIENTE PROCURA PILATES (MESMO COM INDICAÇÃO MÉDICA OU HISTÓRICO DE qualquer lesão (DOR/COLUNA/HÉRNIA):
      * Acolha com muita segurança e empatia! Explique que as turmas de Pilates Funcional têm no máximo 3 alunos por professor e que os exercícios são adaptados individualmente para as limitações e recomendações médicas de cada um.
      * NUNCA OBRIGUE o cliente a fazer Avaliação Fisioterapêutica para começar o Pilates. O caminho padrão é convidá-lo diretamente para a Aula Experimental em Grupo (R$ 80, abatida integralmente na matrícula).
      * Só ofereça a Avaliação Fisioterapêutica Individual (R$ 150) se o próprio cliente disser que está em crise aguda de dor, travado, em recuperação pós-cirúrgica imediata ou se ele pedir expressamente uma consulta de Fisioterapia.
-     * Pergunte se prefere fazer a experimental no período da manhã ou da tarde/noite para verificar a grade com a Malu.
+     * Pergunte se prefere fazer a experimental no período da manhã ou da tarde/noite para a Malu verificar a grade.
 
    - SE O CLIENTE RESPONDER MASSOTERAPIA OU TERAPIAS MANUAIS:
      * Explique brevemente o foco relaxante ou terapêutico com acolhimento.
      * Avise que esses atendimentos individuais têm horários personalizados alinhados direto com a gestora Malu. Pergunte qual turno (manhã ou tarde) fica melhor.
+
+   - SE O CLIENTE RESPONDER FISIOTERAPIA:
+     * Explique que os atendimentos de Fisioterapia e Avaliação são individuais e personalizados, agendados diretamente com a gestora Malu.
 
 4. Matriz de Fechamento e Quebra de Objeções:
    - Se hesitar por preço/orçamento no Pilates: apresente as plataformas de bem-estar corporativo (Wellhub, TotalPass, GoGood).
@@ -155,7 +164,7 @@ COMO RESPONDER SOBRE DORES E LESÕES
 Quando o cliente mencionar hérnia, lesão labral, dor lombar, cervical, cirurgia, inflamações, dores articulares ou limitações físicas:
 - Demonstre empatia genuína.
 - Explique que muitas pessoas procuram o studio com objetivos semelhantes para melhora de mobilidade, fortalecimento e qualidade de vida.
-- Sugira a avaliação fisioterapêutica inicial.
+- Sugira a avaliação fisioterapêutica inicial apenas se o caso for de dor aguda impeditiva ou pedido explícito.
 - NUNCA: Faça diagnóstico, prometa cura, afirme que o Pilates resolve definitivamente, oriente medicações ou substitua orientação médica.
 
 TABELA DE VALORES E PLANOS
@@ -189,7 +198,8 @@ REGRAS INTERNAS, FALTAS E REPOSIÇÕES
 
 REGRAS FINAIS
 - Nunca invente informações e nunca fale sobre assuntos fora do studio.
-- Termine sempre com uma pergunta acolhedora para manter o cliente em direção ao agendamento."""
+- Termine sempre com uma pergunta acolhedora para manter o cliente em direção ao agendamento.
+"""
 
 def inicializar_banco():
     with sqlite3.connect(DB_FILE) as conn:
@@ -276,7 +286,12 @@ def analisar_mensagem_e_intencao(texto_usuario: str, nome_existente: str = None)
     prompt_analise = f"""Analise a última mensagem do cliente no WhatsApp e retorne APENAS um JSON:
 1. "nome": Nome do cliente (se ele informou aqui ou se já temos '{nome_existente}').
 2. "dias_adiar": Se mencionou viagem ou pediu contacto mais tarde, extraia os dias corridos. Caso contrário, 7.
-3. "quer_agendar": true se o cliente confirmou que quer agendar a experimental/sessão, informou dias livres (ex: 'quinta de manhã', 'prefiro à tarde', 'pode ser amanhã') ou pediu para falar com um atendente humano para fechar horário. Caso contrário, false.
+3. "quer_agendar": true se o cliente:
+   - confirmou que quer agendar ou marcar (ex: 'sim', 'quero agendar', 'vamos marcar');
+   - pediu horário específico para qualquer serviço (ex: massagem, pilates, experimental, fisioterapia);
+   - informou dias/turnos livres (ex: 'quinta de manhã', 'prefiro à tarde', 'pode ser amanhã');
+   - pediu para falar com um atendente humano para ver horários.
+   Caso contrário, false.
 
 Mensagem: "{texto_usuario}"
 Formato esperado: {{"nome": "NomeOuNull", "dias_adiar": 7, "quer_agendar": false}}"""
@@ -445,6 +460,20 @@ def webhook():
         enviar_mensagem_whatsapp(telefone, msg_exige_nome)
         return jsonify({"status": "aguardando_nome"}), 200
 
+    # SE O CLIENTE QUISER AGENDAR (OU PEDIU HORÁRIO ESPECÍFICO):
+    # A Betina avisa que passou para a Malu, desliga a IA e alerta seu grupo
+    if quer_agendar:
+        msg_passagem = (
+            f"Perfeito, {nome_atualizado}! ✨ Como os horários de massagem, fisioterapia e aula experimental "
+            f"são organizados diretamente na grade do estúdio, já passei seus dados para a nossa gestora Malu. "
+            f"Ela vai te chamar por aqui em instantes para alinhar o melhor horário com você!"
+        )
+        enviar_mensagem_whatsapp(telefone, msg_passagem)
+        desativar_ia_para_cliente(telefone)
+        notificar_grupo_lead(nome_atualizado, telefone, texto_cliente)
+        print(f"[HANDOVER IMEDIATO] Lead {nome_atualizado} quer agendar. Notificado grupo e Betina desligada.")
+        return jsonify({"status": "transferido_para_humano"}), 200
+
     historico = obter_ou_criar_historico(telefone)
     historico.append({"role": "user", "content": texto_cliente})
 
@@ -465,12 +494,6 @@ def webhook():
     atualizar_interacao(telefone, nome=nome_atualizado, dias_adiar=dias_adiar)
     print(f"[RESPONDENDO] Envio para {telefone}: {texto_resposta}")
     enviar_mensagem_whatsapp(telefone, texto_resposta)
-
-    # DISPARO PARA O GRUPO INTERNO SE O LEAD QUISER AGENDAR
-    if quer_agendar:
-        notificar_grupo_lead(nome_atualizado, telefone, texto_cliente)
-        desativar_ia_para_cliente(telefone)
-        print(f"[HANDOVER] Lead {nome_atualizado} encaminhado para o grupo. Betina pausada para {telefone}.")
 
     return jsonify({"status": "mensagem_processada"}), 200
 
