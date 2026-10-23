@@ -157,8 +157,8 @@ FLUXO DA CONVERSA E VENDA CONSULTIVA
      * Explique que os atendimentos de Fisioterapia e Avaliação são individuais e personalizados, agendados diretamente com a gestora Malu.
 
 4. Matriz de Fechamento e Quebra de Objeções:
-   - Se hesitar por preço/orçamento no Pilates: apresente as plataformas de bem-estar corporativo (Wellhub, TotalPass, GoGood).
-   - Se hesitar por tempo/rotina corrida (Downsell): ofereça sessões pontuais avulsas de Massoterapia (R$ 190) ou Terapias Manuais (R$ 280).
+   - Se hesitar por preço/orçamento no Pilates: apresente as plataformas de bem-estar corporativo (Wellhub, TotalPass, GoGood, ClassPass).
+   - Se hesitar por tempo/rotina corrida (Downsell): ofereça sessões pontuais avulsas de Massoterapia (R$ 190) ou Terapias Manuais (R$ 290).
 
 COMO RESPONDER SOBRE DORES E LESÕES
 Quando o cliente mencionar hérnia, lesão labral, dor lombar, cervical, cirurgia, inflamações, dores articulares ou limitações físicas:
@@ -183,7 +183,7 @@ Aula Experimental em Grupo: R$ 80 (abatida integralmente caso feche plano)
 Personal Pilates: 4 aulas R$ 600 | 8 aulas R$ 960 | 12 aulas R$ 1.320
 Avaliação Fisioterapêutica Individual: R$ 150
 Fisioterapia avulsa: R$ 210 | Pacote com 4: R$ 720 | Pacote com 8: R$ 1.280 | Kinesiotape: R$ 75
-Terapias Manuais: R$ 280 | Pacote com 4: R$ 1.000
+Terapias Manuais: R$ 290 | Pacote com 4: R$ 1.000
 Bota Pneumática: Avulsa R$ 110 | Pacote com 4: R$ 360
 Massoterapia: Avulsa R$ 190 | Pacote com 4: R$ 680 | Pacote com 6: R$ 960
 
@@ -191,6 +191,7 @@ PLATAFORMAS DE BEM-ESTAR ACEITAS
 - WellHub: Agendamento direto pelo app (mínimo 1h de antecedência) e check-in ao chegar. Planos: Gold+, Platinum, Diamond, Diamond+.
 - TotalPass: Agendamento direto pelo app (mínimo 1h de antecedência) e check-in ao chegar. Planos: T5+.
 - GoGood: Agendamento via WhatsApp e validação de QR Code presencial com o professor. Planos: Premium, Elite.
+- Class Pass: Agendamento direto pelo app (mínimo 1h de antecedência) e check-in ao chegar.
 
 REGRAS INTERNAS, FALTAS E REPOSIÇÕES
 - Meias opcionais. Trazer toalha e garrafinha. Estacionamento cortesia durante a aula.
@@ -364,11 +365,11 @@ def checar_e_disparar_lembretes_e_followups():
             if agora >= data_alvo:
                 nome_formatado = f", {nome}" if nome else ""
                 if etapa == 0:
-                    msg = f"Oi{nome_formatado}! Passando para saber como você está e se conseguiu dar uma olhadinha na sua rotina para vir nos conhecer ✨ Estamos organizando a grade das turmas e lembramos de você. Se quiser experimentar uma aula essa semana, me dá um toque que vejo um horário bem tranquilo pra você!"
+                    msg = f"Oi{nome_formatado}! Passando para saber como você está e se conseguiu dar uma olhadinha na sua rotina para vir nos conhecer ✨ Estamos organizando a grade das turmas e lembramos de você. Se quiser experimentar uma aula essa semana, me dá um toque que vejo um horário pra você!"
                     proxima_data = (agora + timedelta(days=7)).isoformat()
                     nova_etapa = 1
                 elif etapa == 1:
-                    msg = f"Oi{nome_formatado}, tudo bem? Sei que a correria do dia a dia às vezes não dá trégua! Só passei para te dar um abraço e dizer que se a rotina semanal estiver muito apertada pro Pilates agora, você também pode agendar uma sessão pontual de massoterapia ou fisioterapia/liberação se estiver precisando cuidar do corpo sem o compromisso de um plano agora ✨ Vou deixar você tranquila, mas saiba que as portas estão abertas quando quiser vir!"
+                    msg = f"Oi{nome_formatado}, tudo bem? Sei que a correria do dia a dia às vezes não dá trégua! Só passei para te dar um alô e dizer que se a rotina semanal estiver muito apertada pro Pilates agora, você também pode agendar uma sessão pontual de massoterapia ou fisioterapia/liberação se estiver precisando cuidar do corpo sem o compromisso de um plano agora. Saiba que as portas estão abertas quando quiser vir!"
                     proxima_data = None
                     nova_etapa = 2
                 
@@ -425,6 +426,12 @@ def webhook():
         print(f"[ATENDIMENTO HUMANO] A Malu escreveu para {telefone}. Betina desligada.")
         return jsonify({"status": "humano_assumiu"}), 200
 
+    # 1. Ignora se for mensagem efêmera, protocolo ou reação
+    message_type = data.get("messageType")
+    if message_type in ["protocolMessage", "reactionMessage", "ephemeralMessage"]:
+        return jsonify({"status": "ignored_protocol"}), 200
+
+    # 2. Extrai estritamente texto real digitado
     message_obj = data.get("message", {})
     texto_cliente = (
         message_obj.get("conversation")
@@ -432,6 +439,7 @@ def webhook():
         or ""
     ).strip()
 
+    # Se não tiver texto digitado real (ou se for vazio), descarta e não cadastra
     if not texto_cliente:
         return jsonify({"status": "no_text"}), 200
 
