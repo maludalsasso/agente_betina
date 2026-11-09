@@ -339,10 +339,11 @@ def checar_e_disparar_lembretes_e_followups():
             try:
                 data_envio = datetime.fromisoformat(atualizado_em)
                 if (agora - data_envio).total_seconds() >= 1800:
-                    if nome:
-                        msg_lembrete = f"Oi, {nome}! Passando só para ver se você conseguiu ver minha última mensagem por aí 😊 Se quiser dar continuidade, estou por aqui! ✨"
-                    else:
-                        msg_lembrete = "Oi! Passando só para ver se você conseguiu ver minha mensagem por aí 😊 Se quiser dar continuidade, é só me dizer seu nome que te passo todas as informações do estúdio ✨"
+                    tem_nome = nome and str(nome).strip().lower() not in ["none", "null", ""]
+                if tem_nome:
+                    msg_lembrete = f"Oi, {nome.strip()}! Passando só para ver se você conseguiu ver minha última mensagem por aí 😊 Se quiser dar continuidade, estou por aqui! ✨"
+                else:
+                    msg_lembrete = "Olá! Passando só para ver se você conseguiu ver minha mensagem por aí 😊 Se quiser dar continuidade, é só me dizer seu nome que te passo todas as informações do estúdio ✨"
                     
                     print(f"[LEMBRETE 30 MIN DISPARADO] Para {tel}")
                     enviar_mensagem_whatsapp(tel, msg_lembrete)
@@ -363,13 +364,17 @@ def checar_e_disparar_lembretes_e_followups():
                 continue
             data_alvo = datetime.fromisoformat(data_prox)
             if agora >= data_alvo:
+                
                 nome_formatado = f", {nome}" if nome else ""
+                tem_nome = nome and str(nome).strip().lower() not in ["none", "null", ""]
+                saudacao = f"Oi, {nome.strip()}" if tem_nome else "Olá"
+
                 if etapa == 0:
-                    msg = f"Oi{nome_formatado}! Passando para saber como você está e se conseguiu dar uma olhadinha na sua rotina para vir nos conhecer ✨ Estamos organizando a grade das turmas e lembramos de você. Se quiser experimentar uma aula essa semana, me dá um toque que vejo um horário pra você!"
+                    msg = f"{saudacao}! Passando para saber como você está e se conseguiu dar uma olhadinha na sua rotina para vir nos conhecer ✨ Estamos organizando a grade das turmas e lembramos de você. Se quiser experimentar uma aula essa semana, me dá um toque que vejo um horário bem tranquilo pra você!"
                     proxima_data = (agora + timedelta(days=7)).isoformat()
                     nova_etapa = 1
                 elif etapa == 1:
-                    msg = f"Oi{nome_formatado}, tudo bem? Sei que a correria do dia a dia às vezes não dá trégua! Só passei para te dar um alô e dizer que se a rotina semanal estiver muito apertada pro Pilates agora, você também pode agendar uma sessão pontual de massoterapia ou fisioterapia/liberação se estiver precisando cuidar do corpo sem o compromisso de um plano agora. Saiba que as portas estão abertas quando quiser vir!"
+                    msg = f"{saudacao}, tudo bem? Sei que a correria do dia a dia às vezes não dá trégua! Só passei para te dar um alô e dizer que se a rotina semanal estiver muito apertada pro Pilates agora, você também pode agendar uma sessão pontual de massoterapia ou fisioterapia/liberação se estiver precisando cuidar do corpo sem o compromisso de um plano agora. Saiba que as portas estão abertas quando quiser vir!"
                     proxima_data = None
                     nova_etapa = 2
                 
