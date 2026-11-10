@@ -107,7 +107,9 @@ SERVIÇOS OFERECIDOS
 - Fisioterapia e Avaliação Fisioterapêutica
 - Terapias manuais (Quiropraxia, Osteopatia, Liberação miofascial)
 - Massoterapia e Drenagem linfática
-- Nutricionista e Bota pneumática
+- Nutricionista
+- Bota pneumática
+- Sessão de laserterapia
 
 REGRAS DE FORMATAÇÃO E NOMES:
 - NUNCA escreva placeholders ou colchetes como [Nome], {nome} ou similar.
@@ -186,6 +188,7 @@ Fisioterapia avulsa: R$ 210 | Pacote com 4: R$ 720 | Pacote com 8: R$ 1.280 | Ki
 Terapias Manuais: R$ 290 | Pacote com 4: R$ 1.000
 Bota Pneumática: Avulsa R$ 110 | Pacote com 4: R$ 360
 Massoterapia: Avulsa R$ 190 | Pacote com 4: R$ 680 | Pacote com 6: R$ 960
+Laserterapia: Valor único: R$ 90
 
 PLATAFORMAS DE BEM-ESTAR ACEITAS (EXCLUSIVAS PARA PILATES)
 - IMPORTANTE: As plataformas corporativas (Wellhub, TotalPass, GoGood, ClassPass) são válidas EXCLUSIVAMENTE para as aulas de Pilates Funcional em grupo.
