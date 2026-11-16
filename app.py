@@ -407,6 +407,11 @@ def webhook():
     if not dados:
         return jsonify({"status": "no data"}), 200
 
+    instancia_evento = dados.get("instance")
+    instancia_bot = os.getenv("EVOLUTION_INSTANCE_NAME") or os.getenv("EVOLUTION_INSTANCE")
+    if instancia_bot and instancia_evento and instancia_evento != instancia_bot:
+        return jsonify({"status": "instancia_ignorada"}), 200
+    
     evento = dados.get("event")
     if evento != "messages.upsert":
         return jsonify({"status": "ignored_event"}), 200
