@@ -5,6 +5,7 @@ import sqlite3
 import json
 import time
 import requests
+import threading
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify
 from openai import OpenAI
@@ -124,6 +125,7 @@ ESTILO DE COMUNICAÇÃO E CADÊNCIA NO WHATSAPP
 - Use emojis leves e moderados (😊✨).
 - NUNCA diga frases como: "isso ajuda a personalizar seu atendimento", "para melhor atendê-lo", "para otimizar seu atendimento", "assim posso te ajudar melhor".
 - Evite termos frios/corporativos (não use "descompressão", "mensalidade fixa").
+- NUNCA ATROPELE ETAPAS: Se você acabou de fazer uma pergunta (ex: perguntar se tem algum objetivo ou dor), PARE a sua resposta imediatamente após a pergunta. Jamais ofereça a Aula Experimental na mesma resposta em que perguntou o objetivo do cliente. Aguarde a resposta dele no próximo turno.
 
 COMO FUNCIONAM AS AULAS DE PILATES FUNCIONAL:
 Quando o cliente perguntar como funcionam as aulas, a metodologia, como é o treino ou a diferença para o Pilates clássico:
@@ -401,6 +403,86 @@ scheduler.start()
 
 mensagens_processadas_recentes = set()
 
+# Buffer para agrupar mensagens picadas do mesmo cliente
+buffers_mensagens = {}
+timers_buffer = {}
+lock_buffer = threading.Lock()
+TEMPO_BUFFER_SEGUNDOS = 4.0
+
+
+def processar_mensagem_agrupada(telefone: str):
+    """Executa o atendimento somente após o cliente parar de digitar por 4.0 segundos."""
+    with lock_buffer:
+        mensagens = buffers_mensagens.pop(telefone, [])
+        timers_buffer.pop(telefone, None)
+
+    if not mensagens:
+        return
+
+    texto_cliente = "\n".join(mensagens).strip()
+    print(f"[BUFFER CONSOLIDADO] {telefone}: {texto_cliente}")
+
+    cliente = consultar_cliente(telefone)
+
+    if cliente is None:
+        cadastrar_novo_cliente(telefone)
+        historico = obter_ou_criar_historico(telefone)
+        historico.append({"role": "user", "content": texto_cliente})
+        historico.append({"role": "assistant", "content": MENSAGEM_BOAS_VINDAS})
+        print(f"[NOVO CLIENTE] A enviar boas-vindas para {telefone}")
+        enviar_mensagem_whatsapp(telefone, MENSAGEM_BOAS_VINDAS)
+        return
+
+    status, total_msg, nome_cadastrado, etapa, _, _, _ = cliente
+    if status == 'humano_assumiu':
+        return
+
+    info_analise = analisar_mensagem_e_intencao(texto_cliente, nome_cadastrado)
+    nome_atualizado = info_analise.get("nome") or nome_cadastrado
+    dias_adiar = info_analise.get("dias_adiar", 7)
+    quer_agendar = info_analise.get("quer_agendar", False)
+
+    if not nome_atualizado:
+        msg_exige_nome = "Prazer! ✨ Antes de te passar todos os detalhes, qual é o seu nome?"
+        enviar_mensagem_whatsapp(telefone, msg_exige_nome)
+        return
+
+    # SE O CLIENTE QUISER AGENDAR (OU PEDIU HORÁRIO ESPECÍFICO):
+    # A Betina avisa que passou para a Malu, desliga a IA e alerta seu grupo
+    if quer_agendar:
+        msg_passagem = (
+            f"Perfeito, {nome_atualizado}! ✨ Como os horários de massagem, fisioterapia e aula experimental "
+            f"são organizados diretamente na grade do estúdio, já passei seus dados para a nossa gestora Malu. "
+            f"Ela vai te chamar por aqui em instantes para alinhar o melhor horário com você!"
+        )
+        enviar_mensagem_whatsapp(telefone, msg_passagem)
+        desativar_ia_para_cliente(telefone)
+        notificar_grupo_lead(nome_atualizado, telefone, texto_cliente)
+        print(f"[HANDOVER IMEDIATO] Lead {nome_atualizado} quer agendar. Notificado grupo e Betina desligada.")
+        return
+
+    historico = obter_ou_criar_historico(telefone)
+    historico.append({"role": "user", "content": texto_cliente})
+
+    resposta = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=historico,
+        temperature=0.3
+    )
+    texto_resposta = resposta.choices[0].message.content
+
+    if "[Nome]" in texto_resposta and nome_atualizado:
+        texto_resposta = texto_resposta.replace("[Nome]", nome_atualizado)
+    elif "[Nome]" in texto_resposta:
+        texto_resposta = texto_resposta.replace("[Nome]!", "tudo bem?")
+
+    historico.append({"role": "assistant", "content": texto_resposta})
+
+    atualizar_interacao(telefone, nome=nome_atualizado, dias_adiar=dias_adiar)
+    print(f"[RESPONDENDO] Envio para {telefone}: {texto_resposta}")
+    enviar_mensagem_whatsapp(telefone, texto_resposta)
+
+
 @app.route('/webhook', methods=['POST'])
 def webhook():
     dados = request.get_json(force=True, silent=True)
@@ -411,7 +493,7 @@ def webhook():
     instancia_bot = os.getenv("EVOLUTION_INSTANCE_NAME") or os.getenv("EVOLUTION_INSTANCE")
     if instancia_bot and instancia_evento and instancia_evento != instancia_bot:
         return jsonify({"status": "instancia_ignorada"}), 200
-    
+
     evento = dados.get("event")
     if evento != "messages.upsert":
         return jsonify({"status": "ignored_event"}), 200
@@ -439,6 +521,11 @@ def webhook():
     telefone = jid_alvo.split("@")[0]
 
     if from_me:
+        with lock_buffer:
+            if telefone in timers_buffer:
+                timers_buffer[telefone].cancel()
+                timers_buffer.pop(telefone, None)
+            buffers_mensagens.pop(telefone, None)
         desativar_ia_para_cliente(telefone)
         print(f"[ATENDIMENTO HUMANO] A Malu escreveu para {telefone}. Betina desligada.")
         return jsonify({"status": "humano_assumiu"}), 200
@@ -460,68 +547,22 @@ def webhook():
     if not texto_cliente:
         return jsonify({"status": "no_text"}), 200
 
-    cliente = consultar_cliente(telefone)
+    # Alimenta o buffer e reinicia o timer de 4.0s
+    with lock_buffer:
+        if telefone not in buffers_mensagens:
+            buffers_mensagens[telefone] = []
+        buffers_mensagens[telefone].append(texto_cliente)
 
-    if cliente is None:
-        cadastrar_novo_cliente(telefone)
-        historico = obter_ou_criar_historico(telefone)
-        historico.append({"role": "user", "content": texto_cliente})
-        historico.append({"role": "assistant", "content": MENSAGEM_BOAS_VINDAS})
-        print(f"[NOVO CLIENTE] A enviar boas-vindas para {telefone}")
-        enviar_mensagem_whatsapp(telefone, MENSAGEM_BOAS_VINDAS)
-        return jsonify({"status": "boas_vindas_enviada"}), 200
+        if telefone in timers_buffer:
+            timers_buffer[telefone].cancel()
 
-    status, total_msg, nome_cadastrado, etapa, _, _, _ = cliente
-    if status == 'humano_assumiu':
-        return jsonify({"status": "silenciada_porque_humano_assumiu"}), 200
+        timer = threading.Timer(TEMPO_BUFFER_SEGUNDOS, processar_mensagem_agrupada, args=[telefone])
+        timers_buffer[telefone] = timer
+        timer.start()
 
-    info_analise = analisar_mensagem_e_intencao(texto_cliente, nome_cadastrado)
-    nome_atualizado = info_analise.get("nome") or nome_cadastrado
-    dias_adiar = info_analise.get("dias_adiar", 7)
-    quer_agendar = info_analise.get("quer_agendar", False)
-
-    if not nome_atualizado:
-        msg_exige_nome = "Prazer! ✨ Antes de te passar todos os detalhes, qual é o seu nome?"
-        enviar_mensagem_whatsapp(telefone, msg_exige_nome)
-        return jsonify({"status": "aguardando_nome"}), 200
-
-    # SE O CLIENTE QUISER AGENDAR (OU PEDIU HORÁRIO ESPECÍFICO):
-    # A Betina avisa que passou para a Malu, desliga a IA e alerta seu grupo
-    if quer_agendar:
-        msg_passagem = (
-            f"Perfeito, {nome_atualizado}! ✨ Como os horários de massagem, fisioterapia e aula experimental "
-            f"são organizados diretamente na grade do estúdio, já passei seus dados para a nossa gestora Malu. "
-            f"Ela vai te chamar por aqui em instantes para alinhar o melhor horário com você!"
-        )
-        enviar_mensagem_whatsapp(telefone, msg_passagem)
-        desativar_ia_para_cliente(telefone)
-        notificar_grupo_lead(nome_atualizado, telefone, texto_cliente)
-        print(f"[HANDOVER IMEDIATO] Lead {nome_atualizado} quer agendar. Notificado grupo e Betina desligada.")
-        return jsonify({"status": "transferido_para_humano"}), 200
-
-    historico = obter_ou_criar_historico(telefone)
-    historico.append({"role": "user", "content": texto_cliente})
-
-    resposta = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=historico,
-        temperature=0.3
-    )
-    texto_resposta = resposta.choices[0].message.content
-
-    if "[Nome]" in texto_resposta and nome_atualizado:
-        texto_resposta = texto_resposta.replace("[Nome]", nome_atualizado)
-    elif "[Nome]" in texto_resposta:
-        texto_resposta = texto_resposta.replace("[Nome]!", "tudo bem?")
-
-    historico.append({"role": "assistant", "content": texto_resposta})
-
-    atualizar_interacao(telefone, nome=nome_atualizado, dias_adiar=dias_adiar)
-    print(f"[RESPONDENDO] Envio para {telefone}: {texto_resposta}")
-    enviar_mensagem_whatsapp(telefone, texto_resposta)
-
-    return jsonify({"status": "mensagem_processada"}), 200
-
+    print(f"[BUFFER +1] Mensagem de {telefone} aguardando {TEMPO_BUFFER_SEGUNDOS}s...")
+    return jsonify({"status": "buffered"}), 200
+  
 @app.route('/resetar/<telefone>', methods=['GET'])
 def resetar_cliente(telefone):
     with sqlite3.connect(DB_FILE) as conn:
