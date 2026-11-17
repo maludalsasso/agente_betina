@@ -10,8 +10,14 @@ from dotenv import load_dotenv
 from flask import Flask, request, jsonify
 from openai import OpenAI
 from apscheduler.schedulers.background import BackgroundScheduler
+from agenda_sheets import init_agenda_db, salvar_mensagem_grupo, sincronizar_agenda_semanal
 
 load_dotenv()
+
+init_agenda_db()
+scheduler = BackgroundScheduler(timezone="America/Sao_Paulo")
+scheduler.add_job(sincronizar_agenda_semanal, trigger="cron", day_of_week="sat", hour=12, minute=0)
+scheduler.start()
 
 app = Flask(__name__)
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -513,8 +519,27 @@ def webhook():
     remote_jid = key.get("remoteJid", "")
     remote_jid_alt = key.get("remoteJidAlt", "")
 
-    # Ignora mensagens enviadas dentro de grupos (evita loops)
+    # Captura silenciosamente mensagens do grupo Agenda HBFIT (sem responder)
     if "@g.us" in remote_jid:
+        print(f"[GRUPO DETECTADO] JID: {remote_jid}")
+        grupo_alvo = os.getenv("GRUPO_AGENDA_JID", "")
+
+        if not grupo_alvo or remote_jid == grupo_alvo:
+            msg_obj = data.get("message", {})
+            texto_grupo = (
+                msg_obj.get("conversation")
+                or msg_obj.get("extendedTextMessage", {}).get("text")
+                or msg_obj.get("editedMessage", {}).get("message", {}).get("protocolMessage", {}).get("editedMessage", {}).get("conversation")
+                or ""
+            )
+            if texto_grupo:
+                salvar_mensagem_grupo(
+                    message_id=msg_id,
+                    remote_jid=remote_jid,
+                    sender_name=data.get("pushName", ""),
+                    texto=texto_grupo,
+                    timestamp_msg=int(data.get("messageTimestamp", 0))
+                )
         return jsonify({"status": "ignored_group"}), 200
 
     jid_alvo = remote_jid_alt if (remote_jid_alt and "@s.whatsapp.net" in remote_jid_alt) else remote_jid
